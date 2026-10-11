@@ -1,0 +1,9 @@
+[Unit]
+Description=Update SSoundCheck from its GitHub repository
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ssoundcheck-update
+TimeoutStartSec=15min
+UMask=0077
