@@ -1,9 +1,10 @@
+import {revisionsByOrder} from '../../../lib/order-revisions';
 import {briefSchema,customerGuard,customerOrder,noStore,type SongOrder} from '../../../lib/song-orders';
 import {getContent} from '../../../lib/site-content';
 import {getSqlite} from '../../../db';
 import {randomUUID} from 'node:crypto';
 export const dynamic='force-dynamic';
-export async function GET(req:Request){const auth=await customerGuard(req);if(auth.error)return auth.error;const rows=getSqlite().prepare('SELECT * FROM song_orders WHERE user_id=? ORDER BY created_at DESC LIMIT 100').all(auth.user.id) as SongOrder[];return Response.json({orders:rows.map(customerOrder),paymentAvailable:false},{headers:noStore});}
+export async function GET(req:Request){const auth=await customerGuard(req);if(auth.error)return auth.error;const rows=getSqlite().prepare('SELECT * FROM song_orders WHERE user_id=? ORDER BY created_at DESC LIMIT 100').all(auth.user.id) as SongOrder[];const revisions=revisionsByOrder(rows.map(o=>o.id));return Response.json({orders:rows.map(o=>({...customerOrder(o),revisions:revisions.get(o.id)||[]})),paymentAvailable:false},{headers:noStore});}
 export async function POST(req:Request){const auth=await customerGuard(req);if(auth.error)return auth.error;
  try{const raw=await req.text();if(raw.length>8000)return Response.json({error:'Слишком длинная заявка.'},{status:413});const parsed=briefSchema.safeParse(JSON.parse(raw));if(!parsed.success)return Response.json({error:'Заполните поля заявки. История — от 10 до 2000 символов.'},{status:400});
  const data=parsed.data,config=getContent(),plan=[...config.plans,config.revisionAddon][data.planIndex];const price=Number(plan.price.replace(/ /g,''))*100;

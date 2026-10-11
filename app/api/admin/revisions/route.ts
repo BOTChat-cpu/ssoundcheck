@@ -1,0 +1,7 @@
+import {z} from 'zod';
+import {adminGuard} from '../../../../lib/admin-auth';
+import {getSqlite} from '../../../../db';
+import {orderIdSchema,noStore} from '../../../../lib/song-orders';
+export const dynamic='force-dynamic';
+const edit=z.object({id:orderIdSchema,status:z.enum(['pending','reviewed'])});
+export async function PATCH(req:Request){const denied=adminGuard(req);if(denied)return denied;try{const parsed=edit.safeParse(await req.json());if(!parsed.success)return Response.json({error:'Проверьте запрос на правки.'},{status:400});const db=getSqlite(),data=parsed.data;const result=db.transaction(()=>{const revision=db.prepare('SELECT order_id FROM order_revisions WHERE id=?').get(data.id) as {order_id:string}|undefined;if(!revision)return {status:404,error:'Запрос не найден.'};if(data.status==='pending'&&db.prepare("SELECT id FROM order_revisions WHERE order_id=? AND status='pending' AND id<>?").get(revision.order_id,data.id))return {status:409,error:'В этой заявке уже есть необработанный запрос.'};const now=Date.now();db.prepare('UPDATE order_revisions SET status=?,updated_at=? WHERE id=?').run(data.status,now,data.id);db.prepare('UPDATE song_orders SET updated_at=? WHERE id=?').run(now,revision.order_id);return {status:200}})();return Response.json(result.error?{error:result.error}:{ok:true},{status:result.status,headers:noStore});}catch{return Response.json({error:'Не удалось обновить запрос.'},{status:400})}}
