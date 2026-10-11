@@ -12,3 +12,13 @@
 .cabinet-auth{max-width:560px;margin:70px auto;padding:35px;border:1px solid var(--border);border-radius:20px;background:#141824}.cabinet-auth>.cabinet-avatar{margin-bottom:25px}.cabinet-auth>p{color:var(--muted);font-size:14px}.cabinet-auth .button{margin-top:20px}.cabinet-profile[hidden],.account-page [hidden]{display:none!important}
 @media(max-width:900px){.cabinet-layout{grid-template-columns:230px minmax(0,1fr);gap:22px;padding:26px 3% 60px}.cabinet-sidebar{padding:20px 14px}.cabinet-navigation button{font-size:11px}.account-page .customer-order{padding:22px}}
 @media(max-width:700px){.account-topbar{padding:17px 5%;gap:15px}.account-topbar .logo{font-size:19px}.account-topbar .text-link{font-size:10px}.cabinet-layout{display:block;padding:22px 5% 50px}.cabinet-sidebar{position:relative;top:auto;padding:18px;margin-bottom:26px}.cabinet-user{margin-bottom:18px}.cabinet-navigation{display:flex;overflow-x:auto;gap:7px;margin-bottom:18px;padding-bottom:7px}.cabinet-navigation button{flex-shrink:0;font-size:11px;padding:11px}.cabinet-new-order{width:auto}.cabinet-logout{margin:0 0 0 20px}.cabinet-heading h1{font-size:30px}.cabinet-profile{padding:24px}.cabinet-auth{margin:35px 5%;padding:28px}.account-page .field-row{grid-template-columns:1fr;gap:0}.account-page .customer-order-summary{grid-template-columns:1fr}.account-page .customer-order{padding:20px}}
+
+/* Brighter surfaces keep the dashboard easy to read. */
+.account-page{--bg:#0f1422;--muted:#b3bdd0;--border:#b9c2e629;background:radial-gradient(ellipse at 85% 0,#8353bc2e,transparent 55%),radial-gradient(ellipse at 0 70%,#3e739323,transparent 60%),var(--bg)}
+.account-topbar{background:#121827f5;border-bottom-color:var(--border)}
+.cabinet-sidebar,.cabinet-profile,.cabinet-auth,.account-page .customer-order{background:linear-gradient(145deg,#20283b,#192132);box-shadow:0 12px 36px #080c182e;border-color:var(--border)}
+.cabinet-sidebar{background:linear-gradient(155deg,#272a40,#1c2435)}
+.cabinet-avatar{background:#c4f36c1c}
+.cabinet-navigation button{color:#c3cbdd}
+.cabinet-navigation button.active{background:#c4f36c14;border-color:#c4f36c42}
+.account-page input,.account-page textarea,.account-page select{background:#131c2c;border-color:#b9c2e636}
