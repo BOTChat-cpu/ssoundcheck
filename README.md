@@ -29,3 +29,7 @@ Node.js >=22.13. Установка: `npm install`. Сборка: `npm run build
 ## Частные песни и фрагменты
 
 В панели «Заявки» можно загрузить полную MP3 до 20 МБ и выбрать начало 40-секундного фрагмента. На VPS один раз выполните `bash /srv/ssoundcheck/current/scripts/beget/setup-order-media.sh` от root для установки ffmpeg/ffprobe. Клиенту выдаётся отдельный M4A продолжительностью ровно 40 секунд; исходный MP3 хранится рядом с SQLite в закрытом каталоге orders, вне public и релизов. Прослушивание требует аккаунт владельца заявки. Полный файл доступен владельцу только при наличии подтверждённой сервером оплаты. Платёжный провайдер пока не подключён; пользователь или администратор не могут выставить paid_at через API.
+
+## Manual bank transfers
+
+Configure recipient, bank and transfer details under Admin → Orders → Payment by transfer. Disabled by default. Details are stored in the private database, never in Git. An owner can report payment only after the private 40-second preview and full file exist. Reports do not unlock audio. Staff must verify the entire amount in their bank and explicitly confirm in Admin; confirmation records the request, amount, media version and timestamps. Pending reports freeze price/status changes and media replacement. Invalid or unmatched reports can be rejected. Dashboard notifications include pending transfers. This workflow does not connect to a bank, charge a card, create tax receipts or verify transfers automatically.
