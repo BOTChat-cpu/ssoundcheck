@@ -1,5 +1,6 @@
 'use client';
 import {useEffect,useState,useRef} from 'react';
+import {SiteMotion} from '../components/site-motion';
 import {authClient} from '../lib/auth-client';
 import {defaultContent,type SiteContent} from '../lib/site-content-defaults';
 import {buildOrderStory} from '../lib/order-draft';
@@ -12,11 +13,11 @@ import {SiteAccount} from '../components/site-account';
 import {ArrowUpRight,ArrowRight,ArrowLeft,Music2,AudioLines,Check,PenLine,Send,Star,Menu,X,Headphones,Clock3} from 'lucide-react';
 type Review={id:string;name:string;body:string;rating:number;createdAt:number};
 function SongCard({song}:{song:SiteContent['songs'][number]}){
-const [failed,setFailed]=useState(false);
-return <article className="song-card">
+const [failed,setFailed]=useState(false),[playing,setPlaying]=useState(false);
+return <article className={'song-card'+(playing?' is-playing':'')}>
 <div className={'song-cover '+song.theme} aria-hidden="true"><div className="cover-orbit"/><div className="cover-orbit second"/><span className="cover-label">SSOUNDCHECK / {song.number}</span><div className="cover-wave">{Array.from({length:31},(_,i)=><i key={i} style={{height:12+Math.abs(Math.sin(i*.7))*Math.abs(Math.cos(i*.17))*105}}/>)}</div><strong>{song.title}</strong><span className="cover-footer">YOUR STORY. YOUR SOUND.</span></div>
 <div className="song-details"><div className="song-title-row"><h3 id={'song-'+song.number}>{song.title}</h3><span>{song.duration}</span></div><p className="song-genre">{song.genre}</p><p className="song-description">{song.description}</p>
-<audio data-song controls preload="none" aria-labelledby={'song-'+song.number} onError={()=>setFailed(true)} onCanPlay={()=>setFailed(false)} onPlay={e=>{const current=e.currentTarget;document.querySelectorAll<HTMLAudioElement>('audio[data-song]').forEach(player=>{if(player!==current)player.pause()})}}><source src={song.src} type="audio/mpeg"/>Ваш браузер не поддерживает плеер. <a href={song.src}>Открыть песню</a></audio>
+<audio data-song controls preload="none" aria-labelledby={'song-'+song.number} onError={()=>setFailed(true)} onCanPlay={()=>setFailed(false)} onPause={()=>setPlaying(false)} onEnded={()=>setPlaying(false)} onPlay={e=>{setPlaying(true);const current=e.currentTarget;document.querySelectorAll<HTMLAudioElement>('audio[data-song]').forEach(player=>{if(player!==current)player.pause()})}}><source src={song.src} type="audio/mpeg"/>Ваш браузер не поддерживает плеер. <a href={song.src}>Открыть песню</a></audio>
 {failed&&<p className="audio-error" role="status">Не удалось загрузить песню. <a href={song.src} target="_blank" rel="noreferrer">Открыть аудиофайл ↗</a></p>}
 </div></article>
 }
@@ -66,6 +67,7 @@ async function sendOrder(e:React.FormEvent<HTMLFormElement>){e.preventDefault();
 
 async function reviewSubmit(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setMessage('');setSignin(false);const f=new FormData(e.currentTarget);try{const r=await fetch('/api/reviews',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.get('name'),body:f.get('body'),rating})});const data=await r.json() as {signIn?:boolean;error?:string};if(!r.ok){setSignin(!!data.signIn);throw new Error(data.error)}setMessage('Спасибо! Ваш отзыв отправлен на проверку.');await load();}catch(e){setMessage(e instanceof Error?e.message:'Ошибка отправки. Попробуйте позже.')}finally{setBusy(false)}}
 return <>
+<SiteMotion/>
 <header><a className="logo" href="#"><span className="logo-icon"><AudioLines size={22}/></span>SSound<span>Check</span></a><nav className={menu?'open':''}><a href="#services" onClick={()=>setMenu(false)}>Услуги и цены</a><a href="#examples" onClick={()=>setMenu(false)}>Послушать</a><a href="#about" onClick={()=>setMenu(false)}>О проекте</a><a href="#process" onClick={()=>setMenu(false)}>Как заказать</a><a href="#reviews" onClick={()=>setMenu(false)}>Отзывы</a><a href="#faq" onClick={()=>setMenu(false)}>Вопросы</a></nav><a className="header-contact" href={content.telegram} target="_blank" rel="noreferrer">Обсудить идею <ArrowUpRight size={16}/></a><button className="account-header" onClick={()=>setAccountOpen(true)}>{accountSession?accountSession.user.name.split(' ')[0]:'Войти'}</button><button className="menu" aria-label={menu?'Закрыть меню':'Открыть меню'} aria-expanded={menu} onClick={()=>setMenu(!menu)}>{menu?<X/>:<Menu/>}</button></header>
 <main>
 <section className="hero"><picture className="hero-background"><source media="(max-width: 760px)" srcSet="/images/studio-hero-mobile-v2.webp"/><img src="/images/studio-hero-v2.webp" alt="" width={1672} height={941} fetchPriority="high"/></picture><div className="hero-glow"/><div className="hero-copy"><p className="eyebrow"><span/> МУЗЫКА, КОТОРАЯ НАЧИНАЕТСЯ С ВАС</p><h1>{content.heroTitle.split("\n").map((line,i)=><span key={i}>{i>0&&<br/>}{i===2?<em>{line}</em>:line}</span>)}</h1><p className="lead">{content.heroLead}</p><div className="hero-actions"><button className="button primary" onClick={()=>choose(2)}>Создать мою песню <ArrowUpRight size={19}/></button><a className="text-link" href="#examples">Послушать песни <ArrowRight size={18}/></a></div><a className="finder-jump" href="#pick-song">Не знаете, с чего начать? Подберём песню за минуту <ArrowRight size={14}/></a><div className="hero-note"><span>01 / ИДЕЯ</span><span>02 / ТВОРЧЕСТВО</span><span>03 / ВАША ПЕСНЯ</span></div></div>
