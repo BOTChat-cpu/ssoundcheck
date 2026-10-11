@@ -126,6 +126,24 @@ try{
  r=await request('/api/admin/notifications?since=invalid');check(r.status===400,'invalid notification watermark rejected');
  r=await request('/api/admin/notifications?since=0');const events=await r.json();check(r.ok&&events.orders===5&&events.revisions===2&&events.reviews===1&&events.pendingRevisions===1,'notification counters reflect created events');
  r=await request('/api/admin/notifications?since='+events.now);const fresh=await r.json();check(fresh.orders===0&&fresh.revisions===0&&fresh.reviews===0,'viewed events not counted twice');check(fresh.pendingOrders===4&&fresh.pendingRevisions===1&&fresh.pendingReviews===1,'marking viewed does not hide pending work');
+ // Manually issued certificates are private, retry-safe and downloadable.
+ const certificateInput={requestId:crypto.randomUUID(),recipient:'Анна',sender:'Кирилл',planIndex:2,message:'Пусть эта песня сохранит самые тёплые воспоминания.'};
+ r=await request('/api/admin/certificates',{auth:false});check(r.status===401,'anonymous certificates denied');
+ r=await request('/api/admin/certificates',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify(certificateInput)});check(r.status===401,'ordinary account cannot issue certificate');
+ r=await request('/api/admin/certificates',{method:'POST',requestOrigin:'https://evil.example',body:JSON.stringify(certificateInput)});check(r.status===403,'cross-origin certificate issuance denied');
+ r=await request('/api/admin/certificates',{method:'POST',body:JSON.stringify({...certificateInput,planIndex:99})});check(r.status===400,'invalid certificate service denied');
+ r=await request('/api/admin/certificates',{method:'POST',body:JSON.stringify(certificateInput)});check(r.status===201,'admin certificate issued');const cert=(await r.json()).certificate;check(cert.status==='issued'&&/^SSC-(?:[0-9A-F]{4}-){4}[0-9A-F]{4}$/.test(cert.code)&&cert.service===content.plans[2].name,'certificate code and service persisted');
+ r=await request('/api/admin/certificates',{method:'POST',body:JSON.stringify(certificateInput)});check(r.status===200&&(await r.json()).certificate.id===cert.id,'certificate retry does not duplicate');
+ r=await request('/api/admin/certificates',{method:'POST',body:JSON.stringify({...certificateInput,recipient:'Другой человек'})});check(r.status===409,'certificate id cannot be reused with new recipient');
+ r=await request('/api/admin/certificates');check((await r.json()).certificates.length===1,'certificate listed privately');
+ r=await request('/api/admin/certificates/file?id='+cert.id+'&format=pdf',{auth:false});check(r.status===401,'anonymous certificate file denied');
+ r=await request('/api/admin/certificates/file?id='+cert.id+'&format=pdf',{auth:false,headers:{Cookie:visitorCookie}});check(r.status===401,'customer cannot download admin certificate');
+ r=await request('/api/admin/certificates/file?id='+cert.id+'&format=pdf');const pdfBytes=Buffer.from(await r.arrayBuffer());check(r.ok&&r.headers.get('content-type')==='application/pdf'&&pdfBytes.subarray(0,8).toString()==='%PDF-1.4'&&pdfBytes.includes(Buffer.from('/MediaBox [0 0 841.89 595.28]')),'printable A4 PDF generated');check(r.headers.get('content-disposition').includes('attachment')&&r.headers.get('cache-control').includes('no-store'),'certificate download headers protect personal contents');
+ r=await request('/api/admin/certificates/file?id='+cert.id+'&format=png');const pngBytes=Buffer.from(await r.arrayBuffer());check(r.ok&&r.headers.get('content-type')==='image/png'&&pngBytes.subarray(1,4).toString()==='PNG','PNG certificate generated');
+ r=await request('/api/admin/certificates',{method:'PATCH',body:JSON.stringify({id:cert.id,status:'redeemed'})});check(r.ok,'certificate can be marked used');
+ r=await request('/api/admin/certificates');check((await r.json()).certificates[0].status==='redeemed','used certificate status persists');
+ r=await request('/api/admin/certificates',{method:'PATCH',body:JSON.stringify({id:cert.id,status:'cancelled'})});check(r.ok,'certificate can be cancelled');
+ r=await request('/api/admin/certificates',{method:'PATCH',body:JSON.stringify({id:cert.id,status:'paid'})});check(r.status===400,'unknown certificate status denied');
  r=await request('/api/admin/session',{method:'DELETE'});check(r.ok,'logout');r=await request('/api/admin/reviews');check(r.status===401,'session revoked');cookie='';
  for(let i=0;i<5;i++)await request('/api/admin/session',{method:'POST',body:JSON.stringify({password:'wrong'})});r=await request('/api/admin/session',{method:'POST',body:JSON.stringify({password})});check(r.status===429,'password brute force throttled');
  console.log('PASS: '+checks+' integration checks; repeatable migration preserves existing review.');
