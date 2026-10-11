@@ -95,6 +95,37 @@ try{
  r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...orderBrief,requestId:crypto.randomUUID(),planIndex:99})});check(r.status===400,'invalid service rejected');
  for(let i=0;i<4;i++){r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...orderBrief,requestId:crypto.randomUUID(),planIndex:i===0?3:1})});check(r.status===201,'additional services accepted');}
  r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...orderBrief,requestId:crypto.randomUUID()})});check(r.status===429,'application spam throttled');
+ // Gift greetings expose only explicitly shared content, never order data or media.
+ const giftInput={orderId,recipient:'Мама',sender:'Кирилл',title:'Эта песня для тебя',message:'Спасибо за любовь и поддержку!',theme:'rose',enabled:true};
+ r=await request('/api/orders/gift?orderId='+orderId,{auth:false});check(r.status===401,'anonymous gift editor denied');
+ r=await request('/api/orders/gift?orderId='+orderId,{auth:false,headers:{Cookie:otherCookie}});check(r.status===404,'gift editor is owner-only');
+ r=await request('/api/orders/gift',{method:'POST',auth:false,headers:{Cookie:otherCookie},body:JSON.stringify(giftInput)});check(r.status===404,'another account cannot share gift');
+ r=await request('/api/orders/gift',{method:'POST',auth:false,headers:{Cookie:visitorCookie},requestOrigin:'https://evil.example',body:JSON.stringify(giftInput)});check(r.status===403,'cross-origin gift save denied');
+ r=await request('/api/orders/gift',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...giftInput,theme:'invalid'})});check(r.status===400,'invalid gift theme rejected');
+ r=await request('/api/admin/orders',{method:'PATCH',body:JSON.stringify({id:orderId,status:'working',price_kopecks:75000})});check(r.ok,'order working for gift gate test');
+ r=await request('/api/orders/gift',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify(giftInput)});check(r.status===409,'gift cannot be shared before result ready');
+ r=await request('/api/orders/gift',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...giftInput,enabled:false})});check(r.ok,'private gift draft allowed');let gift=(await r.json()).gift;check(/^[a-f0-9]{48}$/.test(gift.token),'gift token unguessable');
+ r=await request('/gift/'+gift.token,{auth:false});check(r.status===404,'disabled gift not public');
+ r=await request('/api/admin/orders',{method:'PATCH',body:JSON.stringify({id:orderId,status:'ready',price_kopecks:75000})});check(r.ok,'order ready for sharing');
+ r=await request('/api/orders/gift',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify(giftInput)});check(r.ok,'owner shares gift');gift=(await r.json()).gift;
+ r=await request('/gift/'+gift.token,{auth:false});let giftHtml=await r.text();check(r.ok&&giftHtml.includes(giftInput.message)&&giftHtml.includes(giftInput.recipient),'shared greeting available to recipient');check(!giftHtml.includes(orderBrief.contact)&&!giftHtml.includes(orderBrief.story)&&!giftHtml.includes(email)&&!giftHtml.includes('full_file')&&!giftHtml.includes('<audio'),'gift does not expose private order details or full audio');check(giftHtml.includes('noindex')&&giftHtml.includes('no-referrer'),'gift avoids indexing and referrer disclosure');
+ r=await request('/api/orders/gift',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...giftInput,message:'Обновлённое поздравление',theme:'sunrise'})});check(r.ok&&(await r.json()).gift.token===gift.token,'gift edit preserves share link');
+ r=await request('/api/orders/gift',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...giftInput,enabled:false})});check(r.ok,'owner revokes link');r=await request('/gift/'+gift.token,{auth:false});check(r.status===404,'revoked gift stops being accessible');
+ // Review from a completed order follows existing moderation and account limits.
+ const completedReview={orderId,name:'Слушатель',rating:5,body:'Спасибо за чудесную песню и внимательную работу.'};
+ r=await request('/api/reviews',{method:'POST',auth:false,headers:{Cookie:otherCookie},body:JSON.stringify(completedReview)});check(r.status===404,'review cannot be linked to someone else order');
+ r=await request('/api/admin/orders',{method:'PATCH',body:JSON.stringify({id:orderId,status:'working',price_kopecks:75000})});check(r.ok,'order working for review gate');
+ r=await request('/api/reviews',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify(completedReview)});check(r.status===409,'review from order requires ready result');
+ r=await request('/api/admin/orders',{method:'PATCH',body:JSON.stringify({id:orderId,status:'ready',price_kopecks:75000})});check(r.ok,'order ready for review');
+ r=await request('/api/admin/reviews');const oldVisitorReview=(await r.json()).find(x=>x.name==='Тестовый слушатель');r=await request('/api/admin/reviews?id='+oldVisitorReview.id,{method:'DELETE'});check(r.ok,'test visitor review removed before completed-order review');
+ r=await request('/api/reviews',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify(completedReview)});check(r.status===201,'completed-order review submitted');r=await request('/api/reviews',{auth:false});check((await r.json()).length===0,'completed-order review awaits moderation');
+ r=await request('/api/reviews',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify(completedReview)});check(r.status===409,'one review per account preserved');
+ const verifyDb=new Database(dbPath);check(verifyDb.prepare('SELECT order_id FROM reviews WHERE user_id=?').get('site:'+verifyDb.prepare('SELECT id FROM auth_user WHERE email=?').get(email).id).order_id===orderId,'review linked to completed application');verifyDb.close();
+ // Dashboard notifications are admin-only and based on server snapshots.
+ r=await request('/api/admin/notifications',{auth:false,headers:{Cookie:visitorCookie}});check(r.status===401,'customer cannot read notifications');
+ r=await request('/api/admin/notifications?since=invalid');check(r.status===400,'invalid notification watermark rejected');
+ r=await request('/api/admin/notifications?since=0');const events=await r.json();check(r.ok&&events.orders===5&&events.revisions===2&&events.reviews===1&&events.pendingRevisions===1,'notification counters reflect created events');
+ r=await request('/api/admin/notifications?since='+events.now);const fresh=await r.json();check(fresh.orders===0&&fresh.revisions===0&&fresh.reviews===0,'viewed events not counted twice');check(fresh.pendingOrders===4&&fresh.pendingRevisions===1&&fresh.pendingReviews===1,'marking viewed does not hide pending work');
  r=await request('/api/admin/session',{method:'DELETE'});check(r.ok,'logout');r=await request('/api/admin/reviews');check(r.status===401,'session revoked');cookie='';
  for(let i=0;i<5;i++)await request('/api/admin/session',{method:'POST',body:JSON.stringify({password:'wrong'})});r=await request('/api/admin/session',{method:'POST',body:JSON.stringify({password})});check(r.status===429,'password brute force throttled');
  console.log('PASS: '+checks+' integration checks; repeatable migration preserves existing review.');

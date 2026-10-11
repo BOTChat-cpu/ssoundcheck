@@ -1,0 +1,8 @@
+import {notFound} from 'next/navigation';
+import type {Metadata} from 'next';
+import {getSqlite} from '../../../db';
+import {AudioLines,Heart,Music2} from 'lucide-react';
+import './gift.css';
+export const dynamic='force-dynamic';
+export const metadata:Metadata={title:'Музыкальный подарок — SSoundCheck',robots:{index:false,follow:false},referrer:'no-referrer'};
+export default async function GiftPage({params}:{params:Promise<{token:string}>}){const {token}=await params;if(!/^[a-f0-9]{48}$/.test(token))notFound();const gift=getSqlite().prepare("SELECT g.recipient,g.sender,g.title,g.message,g.theme FROM order_gifts g JOIN song_orders o ON o.id=g.order_id WHERE g.token=? AND g.enabled=1 AND o.status='ready'").get(token) as {recipient:string;sender:string;title:string;message:string;theme:string}|undefined;if(!gift)notFound();return <main className={'gift-page gift-theme-'+gift.theme}><div className="gift-ambient" aria-hidden="true"/><div className="gift-brand"><AudioLines size={21}/>SSoundCheck</div><section className="gift-card"><div className="gift-cover" aria-hidden="true"><div className="gift-orbit"/><div className="gift-orbit second"/><Heart size={64} strokeWidth={1}/><span>YOUR STORY. YOUR SOUND.</span></div><p className="gift-eyebrow">МУЗЫКАЛЬНЫЙ ПОДАРОК ДЛЯ ВАС</p><h1>{gift.title}</h1><p className="gift-recipient">{gift.recipient}</p><div className="gift-letter"><p>{gift.message}</p><span>С теплом, {gift.sender}</span></div><div className="gift-audio-note"><Music2 size={24}/><p>Здесь будет ваша песня.<small>Поздравление уже готово. Аудио пока не добавлено.</small></p></div><p className="gift-footer">Одна история. Особенный человек. Своя музыка.</p></section></main>}
