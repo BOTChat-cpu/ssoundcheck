@@ -45,6 +45,24 @@ try{
  r=await request('/api/auth/sign-up/email',{method:'POST',body:JSON.stringify({email,password,name:'Тестовый слушатель'}),auth:false});check(r.ok,'visitor signup still works');const visitorCookie=r.headers.get('set-cookie').split(';')[0];
  r=await request('/api/reviews',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({name:'Тестовый слушатель',body:'Спасибо за замечательную песню!',rating:5})});check(r.status===201,'visitor review submitted');r=await request('/api/reviews',{auth:false});check((await r.json()).length===0,'new review awaits moderation');
  r=await request('/api/admin/reviews');check((await r.json())[0].status==='pending','pending visible to admin');
+
+ // Direct applications: authenticated, private, server-priced and retry-safe.
+ const orderBrief={requestId:crypto.randomUUID(),planIndex:0,recipient:'Для любимого человека',occasion:'Годовщина',genre:'Поп',mood:'Нежное',story:'История нашей встречи и счастливые моменты.',contact:'@customer_contact',price_kopecks:1,paid_at:Date.now()};
+ r=await request('/api/orders',{method:'POST',auth:false,body:JSON.stringify(orderBrief)});check(r.status===401,'anonymous application rejected');
+ r=await request('/api/orders',{method:'POST',auth:false,requestOrigin:'https://evil.example',headers:{Cookie:visitorCookie},body:JSON.stringify(orderBrief)});check(r.status===403,'cross-origin application rejected');
+ r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify(orderBrief)});check(r.status===201,'direct application submitted');const orderId=(await r.json()).id;
+ r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify(orderBrief)});check(r.status===200&&(await r.json()).id===orderId,'retry returns same application');
+ r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...orderBrief,story:'Другие пожелания и новая история'})});check(r.status===409,'changed retry payload rejected');
+ r=await request('/api/orders',{auth:false,headers:{Cookie:visitorCookie}});let customerOrders=await r.json();check(customerOrders.orders.length===1&&customerOrders.orders[0].price_kopecks===70000,'server price and deduplication');check(customerOrders.orders[0].paid_at===null&&!('full_file' in customerOrders.orders[0])&&!('user_id' in customerOrders.orders[0]),'payment spoof ignored and private fields omitted');
+ r=await request('/api/admin/orders',{auth:false,headers:{Cookie:visitorCookie}});check(r.status===401,'ordinary account cannot read admin orders');
+ r=await request('/api/admin/orders');const adminOrders=await r.json();check(adminOrders.length===1&&adminOrders[0].customerEmail===email&&adminOrders[0].contact===orderBrief.contact,'application appears in admin panel');
+ r=await request('/api/admin/orders',{method:'PATCH',body:JSON.stringify({id:orderId,status:'working',price_kopecks:75000})});check(r.ok,'admin can update application status');
+ r=await request('/api/orders',{auth:false,headers:{Cookie:visitorCookie}});customerOrders=await r.json();check(customerOrders.orders[0].status==='working'&&customerOrders.orders[0].price_kopecks===75000,'updated status persists for owner');
+ const otherEmail='other-'+randomBytes(6).toString('hex')+'@example.com';r=await request('/api/auth/sign-up/email',{method:'POST',body:JSON.stringify({email:otherEmail,password,name:'Другой слушатель'}),auth:false});check(r.ok,'second visitor account');const otherCookie=r.headers.get('set-cookie').split(';')[0];
+ r=await request('/api/orders',{auth:false,headers:{Cookie:otherCookie}});check((await r.json()).orders.length===0,'another visitor cannot see customer application');
+ r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...orderBrief,requestId:crypto.randomUUID(),planIndex:99})});check(r.status===400,'invalid service rejected');
+ for(let i=0;i<4;i++){r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...orderBrief,requestId:crypto.randomUUID(),planIndex:i===0?3:1})});check(r.status===201,'additional services accepted');}
+ r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...orderBrief,requestId:crypto.randomUUID()})});check(r.status===429,'application spam throttled');
  r=await request('/api/admin/session',{method:'DELETE'});check(r.ok,'logout');r=await request('/api/admin/reviews');check(r.status===401,'session revoked');cookie='';
  for(let i=0;i<5;i++)await request('/api/admin/session',{method:'POST',body:JSON.stringify({password:'wrong'})});r=await request('/api/admin/session',{method:'POST',body:JSON.stringify({password})});check(r.status===429,'password brute force throttled');
  console.log('PASS: '+checks+' integration checks; repeatable migration preserves existing review.');
