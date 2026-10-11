@@ -1,9 +1,9 @@
 import {createRequire} from 'node:module';
-import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {spawn} from 'node:child_process';
+import {spawn,execFileSync} from 'node:child_process';
 import {randomBytes,scryptSync} from 'node:crypto';
 import assert from 'node:assert/strict';
 const root=fileURLToPath(new URL('..',import.meta.url)).replace(/\/$/,'');
@@ -95,6 +95,26 @@ try{
  r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...orderBrief,requestId:crypto.randomUUID(),planIndex:99})});check(r.status===400,'invalid service rejected');
  for(let i=0;i<4;i++){r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...orderBrief,requestId:crypto.randomUUID(),planIndex:i===0?3:1})});check(r.status===201,'additional services accepted');}
  r=await request('/api/orders',{method:'POST',auth:false,headers:{Cookie:visitorCookie},body:JSON.stringify({...orderBrief,requestId:crypto.randomUUID()})});check(r.status===429,'application spam throttled');
+ // Customer media is a separately encoded 40-second file; full media is payment-gated.
+ r=await request('/api/admin/orders/'+orderId+'/audio',{method:'POST',auth:false,headers:{Cookie:visitorCookie,'Content-Type':'audio/mpeg'},body:readFileSync(root+'/public/audio/navstrechu.mp3')});check(r.status===401,'customer cannot upload order audio');
+ r=await request('/api/admin/orders/'+orderId+'/audio',{method:'POST',body:Buffer.from('not-mp3'),headers:{'Content-Type':'audio/mpeg'}});check(r.status===400,'invalid order audio rejected');
+ r=await request('/api/admin/orders/'+orderId+'/audio?start=-1',{method:'POST',body:readFileSync(root+'/public/audio/navstrechu.mp3'),headers:{'Content-Type':'audio/mpeg'}});check(r.status===400,'negative preview offset rejected');
+ r=await request('/api/admin/orders/'+orderId+'/audio?start=20',{method:'POST',body:readFileSync(root+'/public/audio/navstrechu.mp3'),headers:{'Content-Type':'audio/mpeg'}});check(r.ok&&(await r.json()).previewDuration===40,'admin uploads private full song and encodes preview');
+ r=await request('/api/orders',{auth:false,headers:{Cookie:visitorCookie}});customerOrders=await r.json();const mediaOrder=customerOrders.orders.find(x=>x.id===orderId);check(mediaOrder.hasPreview&&!mediaOrder.canDownload&&!('full_file' in mediaOrder)&&!('preview_file' in mediaOrder),'only preview availability exposed before payment');
+ r=await request('/api/orders/'+orderId+'/audio',{auth:false});check(r.status===401,'anonymous preview denied');
+ r=await request('/api/orders/'+orderId+'/audio',{auth:false,headers:{Cookie:otherCookie}});check(r.status===404,'another customer cannot listen to private preview');
+ r=await request('/api/orders/'+orderId+'/audio?version=full',{auth:false,headers:{Cookie:visitorCookie}});check(r.status===403,'unpaid full song denied');
+ r=await request('/api/orders/'+orderId+'/audio?version=full&download=1',{auth:false,headers:{Cookie:visitorCookie}});check(r.status===403,'unpaid full download denied');
+ r=await request('/api/orders/'+orderId+'/audio?version=preview',{auth:false,headers:{Cookie:visitorCookie}});const previewBytes=Buffer.from(await r.arrayBuffer());check(r.ok&&r.headers.get('content-type')==='audio/mp4'&&r.headers.get('cache-control').includes('no-store'),'owner receives separate private preview');const previewPath=join(dir,'preview.m4a');writeFileSync(previewPath,previewBytes);const probe=JSON.parse(execFileSync('/usr/bin/ffprobe',['-v','error','-show_entries','format=duration','-of','json',previewPath],{encoding:'utf8'}));check(Math.abs(Number(probe.format.duration)-40)<.001,'actual downloaded preview is exactly 40 seconds');
+ r=await request('/api/orders/'+orderId+'/audio?version=preview',{auth:false,headers:{Cookie:visitorCookie,Range:'bytes=0-99'}});check(r.status===206&&(await r.arrayBuffer()).byteLength===100,'private preview supports player range requests');
+ r=await request('/api/orders/'+orderId+'/audio?version=preview',{method:'HEAD',auth:false,headers:{Cookie:visitorCookie}});check(r.ok&&Number(r.headers.get('content-length'))===previewBytes.length,'owner audio HEAD supported');
+ const mediaDb=new Database(dbPath);const storedMedia=mediaDb.prepare('SELECT full_file,preview_file FROM song_orders WHERE id=?').get(orderId);check(readFileSync(join(dir,'orders',storedMedia.full_file)).length===readFileSync(root+'/public/audio/navstrechu.mp3').length,'original full song stored outside public folder');
+ r=await request('/api/media/'+storedMedia.full_file,{auth:false});check(r.status===404,'private original cannot be fetched through public media route');
+ // Simulate an already verified server-side payment only in the isolated test database.
+ mediaDb.prepare('UPDATE song_orders SET paid_at=? WHERE id=?').run(Date.now(),orderId);
+ r=await request('/api/orders/'+orderId+'/audio?version=full&download=1',{auth:false,headers:{Cookie:visitorCookie,Range:'bytes=0-99'}});check(r.status===206&&(await r.arrayBuffer()).byteLength===100&&r.headers.get('content-disposition').includes('attachment'),'paid owner can download full song');
+ r=await request('/api/orders/'+orderId+'/audio?version=full',{auth:false,headers:{Cookie:otherCookie}});check(r.status===404,'payment does not grant another account access');
+ mediaDb.prepare('UPDATE song_orders SET paid_at=NULL WHERE id=?').run(orderId);mediaDb.close();
  // Gift greetings expose only explicitly shared content, never order data or media.
  const giftInput={orderId,recipient:'Мама',sender:'Кирилл',title:'Эта песня для тебя',message:'Спасибо за любовь и поддержку!',theme:'rose',enabled:true};
  r=await request('/api/orders/gift?orderId='+orderId,{auth:false});check(r.status===401,'anonymous gift editor denied');
