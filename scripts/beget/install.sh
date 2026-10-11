@@ -58,7 +58,7 @@ cat > /etc/nginx/sites-available/ssoundcheck <<'NGINX'
 server {
  listen 80;
  server_name 141.133.201.46;
- client_max_body_size 1m;
+ client_max_body_size 21m;
  location / {
   proxy_pass http://127.0.0.1:3000;
   proxy_http_version 1.1;
