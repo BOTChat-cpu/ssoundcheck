@@ -37,7 +37,8 @@ cd "$RELEASE"
 # npm install reconciles npm 9 / npm 11 peer lockfile differences.
 runuser -u ssoundcheck -- npm install --include=dev --no-audit --no-fund
 runuser -u ssoundcheck -- npm run build
-cp -a public .next/standalone/public
+mkdir -p .next/standalone/public
+cp -a public/. .next/standalone/public/
 mkdir -p .next/standalone/.next
 cp -a .next/static .next/standalone/.next/static
 chown -R ssoundcheck:ssoundcheck .next

@@ -20,7 +20,8 @@ cd "$RELEASE"
 runuser -u ssoundcheck -- npm install --include=dev --no-audit --no-fund
 runuser -u ssoundcheck -- env DATABASE_PATH="$BASE/data/site.sqlite" npm run db:migrate
 runuser -u ssoundcheck -- npm run build
-cp -a public .next/standalone/public
+mkdir -p .next/standalone/public
+cp -a public/. .next/standalone/public/
 mkdir -p .next/standalone/.next
 cp -a .next/static .next/standalone/.next/static
 chown -R ssoundcheck:ssoundcheck .next
