@@ -1,0 +1,8 @@
+import {adminGuard} from '../../../../lib/admin-auth';
+import {getSqlite} from '../../../../db';
+import {z} from 'zod';
+export const dynamic='force-dynamic';
+const review=z.object({id:z.string().min(1).max(100),name:z.string().trim().min(2).max(60),body:z.string().trim().min(10).max(1500),rating:z.number().int().min(1).max(5),status:z.enum(['published','hidden','pending'])});
+export async function GET(req:Request){const denied=adminGuard(req);if(denied)return denied;return Response.json(getSqlite().prepare('SELECT id,name,body,rating,created_at AS createdAt,status FROM reviews ORDER BY created_at DESC LIMIT 500').all(),{headers:{'Cache-Control':'no-store'}});}
+export async function PATCH(req:Request){const denied=adminGuard(req);if(denied)return denied;try{const parsed=review.safeParse(await req.json());if(!parsed.success)return Response.json({error:'Проверьте имя, текст и оценку.'},{status:400});const r=parsed.data;const updated=getSqlite().prepare('UPDATE reviews SET name=?,body=?,rating=?,status=? WHERE id=?').run(r.name,r.body,r.rating,r.status,r.id);return updated.changes?Response.json({ok:true}):Response.json({error:'Отзыв не найден.'},{status:404});}catch{return Response.json({error:'Не удалось сохранить отзыв.'},{status:400});}}
+export async function DELETE(req:Request){const denied=adminGuard(req);if(denied)return denied;const id=new URL(req.url).searchParams.get('id');if(!id||id.length>100)return Response.json({error:'Укажите отзыв.'},{status:400});const result=getSqlite().prepare('DELETE FROM reviews WHERE id=?').run(id);return result.changes?Response.json({ok:true}):Response.json({error:'Отзыв не найден.'},{status:404});}

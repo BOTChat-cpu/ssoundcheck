@@ -4,14 +4,21 @@ import * as schema from './schema';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 let database: BetterSQLite3Database<typeof schema> | undefined;
-export function getDb() {
-  if (!database) {
+let sqlite: Database.Database | undefined;
+export function getSqlite() {
+  if (!sqlite) {
     const path = process.env.DATABASE_PATH || './data/site.sqlite';
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    const client = new Database(path);
-    client.pragma('journal_mode = WAL');
-    client.pragma('foreign_keys = ON');
-    database = drizzle(client, { schema });
+    sqlite = new Database(path);
+    sqlite.pragma('journal_mode = WAL');
+    sqlite.pragma('foreign_keys = ON');
+    sqlite.pragma('busy_timeout = 5000');
+  }
+  return sqlite;
+}
+export function getDb() {
+  if (!database) {
+    database = drizzle(getSqlite(), { schema });
   }
   return database;
 }

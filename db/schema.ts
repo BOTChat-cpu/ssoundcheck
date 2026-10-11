@@ -1,5 +1,5 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
-export const reviews = sqliteTable('reviews', {id:text('id').primaryKey(),userId:text('user_id').notNull().unique(),name:text('name').notNull(),body:text('body').notNull(),rating:integer('rating').notNull(),createdAt:integer('created_at').notNull()});
+export const reviews = sqliteTable('reviews', {id:text('id').primaryKey(),userId:text('user_id').notNull().unique(),name:text('name').notNull(),body:text('body').notNull(),rating:integer('rating').notNull(),createdAt:integer('created_at').notNull(),status:text('status').notNull().default('published')});
 // Accounts belonging to this website; existing reviews stay intact.
 export const user=sqliteTable('auth_user',{
  id:text('id').primaryKey(),name:text('name').notNull(),email:text('email').notNull().unique(),emailVerified:integer('email_verified',{mode:'boolean'}).notNull().default(false),image:text('image'),createdAt:integer('created_at',{mode:'timestamp_ms'}).notNull(),updatedAt:integer('updated_at',{mode:'timestamp_ms'}).notNull(),phoneNumber:text('phone_number').unique(),phoneNumberVerified:integer('phone_number_verified',{mode:'boolean'}),
