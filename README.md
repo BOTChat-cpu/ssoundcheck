@@ -41,3 +41,7 @@ Each order can have a staff-edited song title (up to 120 characters) and cover t
 ## Public example playback
 
 Public example players hide native download controls and direct file links. Customer previews also hide native download controls. The paid owner retains the full song download button. Browser playback can technically be captured; these controls are not DRM.
+
+## Customer account page
+
+/account is a dedicated client account page with Orders/status, Songs/payment, Revisions, Gifts/reviews and Profile sections. Guests sign in before their data is loaded. All order and audio APIs retain ownership checks. The header account button and successful-order link open this page; authentication inside an unfinished order still uses the login dialog to preserve its draft. Tab selection is reflected in the URL hash and supports browser history. Hidden form panels remain mounted to retain in-progress revision and greeting text; audio pauses when leaving the songs section.
