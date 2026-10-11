@@ -1,3 +1,4 @@
+import {unreadMessagesByOrder} from '../../../../lib/order-conversations';
 import {enqueueReadyEmail,kickReadyEmails} from '../../../../lib/order-ready-emails';
 import {latestManualPayment} from '../../../../lib/manual-payments';
 import {revisionsByOrder} from '../../../../lib/order-revisions';
@@ -6,7 +7,7 @@ import {getSqlite} from '../../../../db';
 import {getOrder,orderIdSchema,noStore,type SongOrder} from '../../../../lib/song-orders';
 import {z} from 'zod';
 export const dynamic='force-dynamic';
-export async function GET(req:Request){const denied=adminGuard(req);if(denied)return denied;const rows=getSqlite().prepare('SELECT o.*,u.name AS customerName,u.email AS customerEmail FROM song_orders o JOIN auth_user u ON u.id=o.user_id ORDER BY o.created_at DESC LIMIT 500').all() as (SongOrder&{customerName:string;customerEmail:string})[];const revisions=revisionsByOrder(rows.map(o=>o.id));return Response.json(rows.map(({full_file,preview_file,...o})=>({...o,manualPayment:latestManualPayment(o.id)||null,revisions:revisions.get(o.id)||[],hasPreview:!!preview_file,hasFull:!!full_file})),{headers:noStore});}
+export async function GET(req:Request){const denied=adminGuard(req);if(denied)return denied;const rows=getSqlite().prepare('SELECT o.*,u.name AS customerName,u.email AS customerEmail FROM song_orders o JOIN auth_user u ON u.id=o.user_id ORDER BY o.created_at DESC LIMIT 500').all() as (SongOrder&{customerName:string;customerEmail:string})[];const revisions=revisionsByOrder(rows.map(o=>o.id));const unread=unreadMessagesByOrder(rows.map(o=>o.id),'studio');return Response.json(rows.map(({full_file,preview_file,...o})=>({...o,manualPayment:latestManualPayment(o.id)||null,unreadMessages:unread.get(o.id)||0,revisions:revisions.get(o.id)||[],hasPreview:!!preview_file,hasFull:!!full_file})),{headers:noStore});}
 const dueDate=z.string().regex(/^20\d{2}-\d{2}-\d{2}$/).refine(value=>{const date=new Date(value+'T00:00:00Z');return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value});
 const edit=z.object({id:orderIdSchema,status:z.enum(['submitted','working','ready','cancelled']),price_kopecks:z.number().int().positive().max(100000000),due_date:dueDate.nullable().optional(),customer_message:z.string().trim().max(1500).optional(),song_title:z.string().trim().max(120).optional(),cover_theme:z.enum(['night','rose','sunrise']).optional()});
 export async function PATCH(req:Request){const denied=adminGuard(req);if(denied)return denied;try{const p=edit.safeParse(await req.json());if(!p.success)return Response.json({error:'Проверьте стоимость, статус, дату и сообщение (до 1500 символов).'},{status:400});const data=p.data,db=getSqlite();

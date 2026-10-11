@@ -1,0 +1,1 @@
+export function telegramContact(value:string){const text=value.trim(),match=text.match(/^@([A-Za-z][A-Za-z0-9_]{4,31})$/)||text.match(/^https?:\/\/(?:www\.)?t\.me\/([A-Za-z][A-Za-z0-9_]{4,31})\/?$/);return match?'https://t.me/'+match[1]:null;}
