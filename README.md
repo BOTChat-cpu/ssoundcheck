@@ -45,3 +45,9 @@ Public example players hide native download controls and direct file links. Cust
 ## Customer account page
 
 /account is a dedicated client account page with Orders/status, Songs/payment, Revisions, Gifts/reviews and Profile sections. Guests sign in before their data is loaded. All order and audio APIs retain ownership checks. The header account button and successful-order link open this page; authentication inside an unfinished order still uses the login dialog to preserve its draft. Tab selection is reflected in the URL hash and supports browser history. Hidden form panels remain mounted to retain in-progress revision and greeting text; audio pauses when leaving the songs section.
+
+## Восстановление пароля
+
+Кнопка «Забыли пароль?» во входе и ссылка в профиле ведут на /forgot-password. Настройте исходящую почту один раз от root в SSH: `bash /srv/ssoundcheck/current/scripts/beget/setup-mail.sh`. Нужен существующий почтовый ящик с SMTP; для Beget используются smtp.beget.com и 465 (SSL). Скрипт скрыто запрашивает пароль, проверяет соединение и отправляет проверочное письмо перед сохранением настроек в /etc/ssoundcheck.env (0600), затем перезапускает сервис. Секрет не попадает в Git или аргументы процесса. Порт 587 требует STARTTLS. Не отключайте проверку сертификата. Если почты нет, её нужно создать у почтового провайдера и настроить DNS домена по его инструкции.
+
+Также сохранена поддержка RESEND_API_KEY + AUTH_FROM_EMAIL для верифицированного домена Resend; SMTP имеет приоритет. Без настройки почты страница честно сообщает о недоступности восстановления. Ссылка одноразовая, срок 30 минут; сброс завершает все старые сеансы, не удаляет заявки. Запросы ограничены (3 за 5 минут по IP); ответ не раскрывает существование email. Ошибки доставки записываются без адреса, ссылки и секретов в журнал сервиса. Получение письма реальным клиентом нужно проверить после настройки почты.
