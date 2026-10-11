@@ -194,3 +194,9 @@ header{gap:20px}.account-modal{width:480px}.account-modal h2{overflow-wrap:anywh
  [data-reveal]{opacity:1;translate:none;transition:none}
  .hero-background img,.process-picture img,.cover-wave i{animation:none!important}
 }
+
+/* Navigation remains available while the page scrolls. */
+.site-header{position:sticky;top:0;z-index:20;background:#0a0d18f5;box-shadow:0 8px 28px #0002;-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+.site-header nav.open{top:100%;max-height:calc(100dvh - 80px);overflow-y:auto;overscroll-behavior:contain;box-shadow:0 18px 30px #0004}
+html{scroll-padding-top:110px}
+@media(max-width:760px){html{scroll-padding-top:90px}}
