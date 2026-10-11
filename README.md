@@ -37,3 +37,7 @@ Configure recipient, bank and transfer details under Admin → Orders → Paymen
 ## Song artwork
 
 Each order can have a staff-edited song title (up to 120 characters) and cover theme (night, rose, sunrise). Edit under Admin → Orders → Title and cover, then save the order. The owning customer sees the artwork beside the private preview or paid full song. Artwork edits do not unlock audio or change payment state.
+
+## Public example playback
+
+Public example players hide native download controls and direct file links. Customer previews also hide native download controls. The paid owner retains the full song download button. Browser playback can technically be captured; these controls are not DRM.
