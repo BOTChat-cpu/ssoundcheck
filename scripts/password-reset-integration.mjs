@@ -1,5 +1,5 @@
+import {testMailServer,stopTestServer} from './test-mail-server.mjs';
 // Isolated production API test; local TLS SMTP, disposable accounts and database.
-import {createServer} from 'node:tls';
 import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -8,14 +8,7 @@ import {randomBytes} from 'node:crypto';
 import Database from 'better-sqlite3';
 import assert from 'node:assert/strict';
 const dir=mkdtempSync(join(tmpdir(),'ssound-reset-')),origin='http://127.0.0.1:3190';
-execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-days','1','-keyout',join(dir,'key.pem'),'-out',join(dir,'cert.pem'),'-subj','/CN=localhost','-addext','subjectAltName=IP:127.0.0.1'],{stdio:'ignore'});
-const letters=[],sockets=new Set();
-const smtp=createServer({key:readFileSync(join(dir,'key.pem')),cert:readFileSync(join(dir,'cert.pem'))},socket=>{
- sockets.add(socket);socket.on('close',()=>sockets.delete(socket));socket.setEncoding('utf8');socket.write('220 localhost test SMTP\r\n');let buffer='',data=false,message='';
- socket.on('data',chunk=>{buffer+=chunk;let pos;while((pos=buffer.indexOf('\r\n'))!==-1){const line=buffer.slice(0,pos);buffer=buffer.slice(pos+2);if(data){if(line==='.'){letters.push(message);message='';data=false;socket.write('250 queued\r\n')}else message+=line+'\r\n';continue}if(/^EHLO|^HELO/.test(line))socket.write('250-localhost\r\n250 AUTH PLAIN\r\n');else if(/^AUTH/.test(line))socket.write('235 authenticated\r\n');else if(line==='DATA'){data=true;socket.write('354 send data\r\n')}else if(line==='QUIT'){socket.end('221 bye\r\n')}else socket.write('250 OK\r\n')}});
- socket.on('error',()=>{});
-});
-await new Promise((resolve,reject)=>{smtp.once('error',reject);smtp.listen(1465,'127.0.0.1',resolve)});
+const smtp=await testMailServer(dir,1465),letters=smtp.letters;
 const env={...process.env,DATABASE_PATH:join(dir,'site.sqlite'),BETTER_AUTH_URL:origin,BETTER_AUTH_SECRET:randomBytes(48).toString('hex'),AUTH_SMTP_HOST:'127.0.0.1',AUTH_SMTP_PORT:'1465',AUTH_SMTP_SECURE:'true',AUTH_SMTP_USER:'studio@example.com',AUTH_SMTP_PASSWORD_BASE64:Buffer.from(randomBytes(16).toString('hex')).toString('base64'),AUTH_FROM_EMAIL:'studio@example.com',NODE_EXTRA_CA_CERTS:join(dir,'cert.pem')};
 execFileSync(process.execPath,['scripts/beget/migrate.mjs'],{env,stdio:'ignore'});
 const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3190'],{env,stdio:['ignore','ignore','pipe']});let logs='';server.stderr.on('data',b=>logs+=b);
@@ -48,4 +41,4 @@ try{
  await new Promise(r=>setTimeout(r,100));check(letters.length===2,'no email for nonexistent account');
  r=await post('/request-password-reset',{email,redirectTo:origin+'/reset-password'});check(r.status===429,'recovery request throttled');
  console.log('PASS: '+checks+' password recovery integration checks (local TLS SMTP).');
-}catch(error){console.error(logs.slice(-1000));throw error}finally{db.close();server.kill('SIGTERM');for(const socket of sockets)socket.destroy();await new Promise(r=>smtp.close(r));await new Promise(r=>{if(server.exitCode!==null)r();else server.once('exit',r)});rmSync(dir,{recursive:true,force:true})}
+}catch(error){console.error(logs.slice(-1000));throw error}finally{db.close();server.kill('SIGTERM');await smtp.close();await stopTestServer(server);rmSync(dir,{recursive:true,force:true})}
