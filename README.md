@@ -33,3 +33,7 @@ Node.js >=22.13. Установка: `npm install`. Сборка: `npm run build
 ## Manual bank transfers
 
 Configure recipient, bank and transfer details under Admin → Orders → Payment by transfer. Disabled by default. Details are stored in the private database, never in Git. An owner can report payment only after the private 40-second preview and full file exist. Reports do not unlock audio. Staff must verify the entire amount in their bank and explicitly confirm in Admin; confirmation records the request, amount, media version and timestamps. Pending reports freeze price/status changes and media replacement. Invalid or unmatched reports can be rejected. Dashboard notifications include pending transfers. This workflow does not connect to a bank, charge a card, create tax receipts or verify transfers automatically.
+
+## Song artwork
+
+Each order can have a staff-edited song title (up to 120 characters) and cover theme (night, rose, sunrise). Edit under Admin → Orders → Title and cover, then save the order. The owning customer sees the artwork beside the private preview or paid full song. Artwork edits do not unlock audio or change payment state.

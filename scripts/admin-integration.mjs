@@ -115,6 +115,15 @@ try{
  r=await request('/api/orders/'+orderId+'/audio?version=full&download=1',{auth:false,headers:{Cookie:visitorCookie,Range:'bytes=0-99'}});check(r.status===206&&(await r.arrayBuffer()).byteLength===100&&r.headers.get('content-disposition').includes('attachment'),'paid owner can download full song');
  r=await request('/api/orders/'+orderId+'/audio?version=full',{auth:false,headers:{Cookie:otherCookie}});check(r.status===404,'payment does not grant another account access');
  mediaDb.prepare('UPDATE song_orders SET paid_at=NULL WHERE id=?').run(orderId);mediaDb.close();
+ // Artwork metadata is staff-controlled and visible to the owning customer.
+ const artworkEdit={id:orderId,status:'ready',price_kopecks:75000,song_title:'Ты — мой дом',cover_theme:'rose'};
+ r=await request('/api/admin/orders',{method:'PATCH',body:JSON.stringify(artworkEdit),auth:false,headers:{Cookie:visitorCookie}});check(r.status===401,'customer cannot change studio artwork');
+ r=await request('/api/admin/orders',{method:'PATCH',body:JSON.stringify({...artworkEdit,song_title:'x'.repeat(121)})});check(r.status===400,'oversized song title rejected');
+ r=await request('/api/admin/orders',{method:'PATCH',body:JSON.stringify({...artworkEdit,cover_theme:'invalid'})});check(r.status===400,'invalid cover theme rejected');
+ r=await request('/api/admin/orders',{method:'PATCH',body:JSON.stringify(artworkEdit)});check(r.ok,'admin saves song title and cover');
+ r=await request('/api/orders',{auth:false,headers:{Cookie:visitorCookie}});let artworkOrder=(await r.json()).orders.find(x=>x.id===orderId);check(artworkOrder.song_title===artworkEdit.song_title&&artworkOrder.cover_theme==='rose'&&!artworkOrder.canDownload,'owner gets artwork without bypassing payment');
+ r=await request('/api/admin/orders',{method:'PATCH',body:JSON.stringify({id:orderId,status:'ready',price_kopecks:75000})});check(r.ok,'legacy order edits remain compatible');
+ r=await request('/api/orders',{auth:false,headers:{Cookie:visitorCookie}});artworkOrder=(await r.json()).orders.find(x=>x.id===orderId);check(artworkOrder.song_title===artworkEdit.song_title&&artworkOrder.cover_theme==='rose','unrelated edits preserve artwork');
  // Gift greetings expose only explicitly shared content, never order data or media.
  const giftInput={orderId,recipient:'Мама',sender:'Кирилл',title:'Эта песня для тебя',message:'Спасибо за любовь и поддержку!',theme:'rose',enabled:true};
  r=await request('/api/orders/gift?orderId='+orderId,{auth:false});check(r.status===401,'anonymous gift editor denied');
