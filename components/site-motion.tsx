@@ -1,7 +1,17 @@
 'use client';
-import {useEffect} from 'react';
+import {useEffect,useLayoutEffect} from 'react';
 
 export function SiteMotion(){
+ useLayoutEffect(()=>{
+  const navigation=performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming|undefined;
+  if(navigation?.type!=='reload')return;
+  const previous=history.scrollRestoration;
+  history.scrollRestoration='manual';
+  const top=()=>window.scrollTo({top:0,left:0,behavior:'instant'});
+  top();const frame=requestAnimationFrame(top);
+  window.addEventListener('pageshow',top);
+  return()=>{cancelAnimationFrame(frame);window.removeEventListener('pageshow',top);history.scrollRestoration=previous};
+ },[]);
  useEffect(()=>{
   const preference=window.matchMedia('(prefers-reduced-motion: reduce)');
   if(!('IntersectionObserver' in window))return;
