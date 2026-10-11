@@ -16,7 +16,7 @@ export function SiteMotion(){
   const preference=window.matchMedia('(prefers-reduced-motion: reduce)');
   if(!('IntersectionObserver' in window))return;
   let reveal:IntersectionObserver|undefined,ambient:IntersectionObserver|undefined;
-  const targets=Array.from(document.querySelectorAll<HTMLElement>('.section-heading,.song-card,.occasion-card,.plan,.process-card,.certificate-offer,.about-section,.final-cta'));
+  const targets=Array.from(document.querySelectorAll<HTMLElement>('.section-heading,.song-card,.occasion-card,.plan,.process-card,.certificate-offer,.about-section,.about-purpose,.final-cta'));
   const pictures=Array.from(document.querySelectorAll<HTMLElement>('.hero,.process-picture'));
   function clear(){reveal?.disconnect();ambient?.disconnect();targets.forEach(el=>el.removeAttribute('data-reveal'));pictures.forEach(el=>el.classList.remove('motion-visible'));document.documentElement.classList.remove('motion-paused');}
   function setup(){clear();if(preference.matches)return;
