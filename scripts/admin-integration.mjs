@@ -112,7 +112,7 @@ try{
  r=await request('/api/media/'+storedMedia.full_file,{auth:false});check(r.status===404,'private original cannot be fetched through public media route');
  // Simulate an already verified server-side payment only in the isolated test database.
  mediaDb.prepare('UPDATE song_orders SET paid_at=? WHERE id=?').run(Date.now(),orderId);
- r=await request('/api/orders/'+orderId+'/audio?version=full&download=1',{auth:false,headers:{Cookie:visitorCookie,Range:'bytes=0-99'}});check(r.status===206&&(await r.arrayBuffer()).byteLength===100&&r.headers.get('content-disposition').includes('attachment'),'paid owner can download full song');
+ r=await request('/api/orders/'+orderId+'/audio?version=full&download=1',{auth:false,headers:{Cookie:visitorCookie,Range:'bytes=0-99'}});check(r.status===206&&(await r.arrayBuffer()).byteLength===100&&r.headers.get('content-disposition').includes('attachment')&&r.headers.get('content-type')==='application/octet-stream','paid owner can download full song');
  r=await request('/api/orders/'+orderId+'/audio?version=full',{auth:false,headers:{Cookie:otherCookie}});check(r.status===404,'payment does not grant another account access');
  mediaDb.prepare('UPDATE song_orders SET paid_at=NULL WHERE id=?').run(orderId);mediaDb.close();
  // Artwork metadata is staff-controlled and visible to the owning customer.
