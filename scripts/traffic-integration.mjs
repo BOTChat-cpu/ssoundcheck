@@ -51,12 +51,19 @@ try{
  check(db.prepare('SELECT COUNT(DISTINCT visitor) n FROM site_visits').get().n===2,'browser grouped across separate visits');
  r=await fetch(origin+'/api/admin/session',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({password})});const admin=cookies(r);check(r.ok,'staff login');
  r=await fetch(origin+'/api/admin/traffic?days=7',{headers:{Cookie:admin}});const report=await r.json();check(r.ok&&r.headers.get('cache-control').includes('no-store'),'private admin report');
+ check(report.registrations.total===0&&report.registrations.period===0&&report.registrations.today===0,'empty account counts exclude admin password');
  check(report.summary.automated===1&&report.summary.unknown===2&&report.summary.robotRequests===2,'report separates uncertain automation and bot units');
  check(report.recent.length===3&&report.sources.every(s=>s.source!=='private-person'),'recent and source summary');
  check((await fetch(origin+'/api/admin/traffic?days=2',{headers:{Cookie:admin}})).status===400,'invalid report window rejected');
  await page('/',{Cookie:admin});check(count()===3,'authenticated staff visit excluded');
  cookie=admin+'; '+saved;await signal('browser');check(db.prepare('SELECT state FROM site_visits WHERE state=3').get().state===3,'staff signals excluded');
  check((await fetch(origin+'/api/admin/traffic?days=1',{headers:{Cookie:admin}})).ok,'today report supported');
+ const old=Date.now()-95*86400_000;db.prepare('INSERT INTO auth_user(id,name,email,email_verified,created_at,updated_at) VALUES (?,?,?,0,?,?)').run(crypto.randomUUID(),'Old account','old@example.invalid',old,old);
+ r=await fetch(origin+'/api/auth/sign-up/email',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({email:'fresh@example.invalid',name:'New account',password:'SafeLocalPassword-129'})});check(r.ok,'new account registration succeeds');const customer=cookies(r);
+ r=await fetch(origin+'/api/admin/traffic?days=7',{headers:{Cookie:admin}});const registered=await r.json();check(registered.registrations.total===2&&registered.registrations.period===1&&registered.registrations.today===1,'all-time accounts include older registrations and window counts only new');
+ check(!JSON.stringify(registered).includes('example.invalid'),'account counts do not expose emails');
+ check((await fetch(origin+'/api/admin/traffic',{headers:{Cookie:customer}})).status===401,'customer cannot read registration statistics');
+ r=await fetch(origin+'/api/orders',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({})});check(r.status===401,'order submission requires authenticated account');
  check(readFileSync(root+'/components/site-traffic.tsx','utf8').includes('e.isTrusted'),'collector ignores synthetic input');
  console.log('PASS: '+checks+' traffic integration checks');
 }catch(e){console.error(logs.slice(-2500));throw e}finally{await stopTestServer(server);db.close();rmSync(dir,{recursive:true,force:true})}

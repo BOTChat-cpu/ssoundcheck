@@ -13,6 +13,7 @@ export function GET(req:Request){
  const sources=db.prepare(`SELECT source,COUNT(*) visits,SUM(state=2) active FROM site_visits WHERE started_at>=? AND state!=3 GROUP BY source ORDER BY visits DESC`).all(start);
  const devices=db.prepare(`SELECT device,COUNT(*) visits FROM site_visits WHERE started_at>=? AND state!=3 GROUP BY device ORDER BY visits DESC`).all(start);
  const recent=db.prepare('SELECT substr(id,1,8) ref,started_at,last_seen,views,state,device,source FROM site_visits WHERE started_at>=? ORDER BY started_at DESC LIMIT 50').all(start);
+ const registrations={total:(db.prepare('SELECT COUNT(*) count FROM auth_user').get() as {count:number}).count,period:(db.prepare('SELECT COUNT(*) count FROM auth_user WHERE created_at>=?').get(start) as {count:number}).count,today:(db.prepare('SELECT COUNT(*) count FROM auth_user WHERE created_at>=?').get(Date.parse(today+'T00:00:00+03:00')) as {count:number}).count};
  const first=db.prepare('SELECT MIN(started_at) started FROM site_visits').get() as {started:number|null};
- return Response.json({days,from:dayOf(start),today,firstRecordedAt:first.started,summary:{...summary,robotRequests:bots.requests},daily,botDays,sources,devices,recent},{headers:{'Cache-Control':'private, no-store'}});
+ return Response.json({days,from:dayOf(start),today,firstRecordedAt:first.started,registrations,summary:{...summary,robotRequests:bots.requests},daily,botDays,sources,devices,recent},{headers:{'Cache-Control':'private, no-store'}});
 }
