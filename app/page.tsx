@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useState,useRef} from 'react';
 import {CertificateOffer,certificateRequestPrefix} from '../components/certificate-offer';
+import {SiteTraffic} from '../components/site-traffic';
 import {SiteMotion} from '../components/site-motion';
 import {authClient} from '../lib/auth-client';
 import {defaultContent,type SiteContent} from '../lib/site-content-defaults';
@@ -69,7 +70,7 @@ async function sendOrder(e:React.FormEvent<HTMLFormElement>){e.preventDefault();
 
 async function reviewSubmit(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setMessage('');setSignin(false);const f=new FormData(e.currentTarget);try{const r=await fetch('/api/reviews',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.get('name'),body:f.get('body'),rating})});const data=await r.json() as {signIn?:boolean;error?:string};if(!r.ok){setSignin(!!data.signIn);throw new Error(data.error)}setMessage('Спасибо! Ваш отзыв отправлен на проверку.');await load();}catch(e){setMessage(e instanceof Error?e.message:'Ошибка отправки. Попробуйте позже.')}finally{setBusy(false)}}
 return <>
-<SiteMotion/>
+<SiteTraffic/><SiteMotion/>
 <header className="site-header"><a className="logo" href="#"><span className="logo-icon"><AudioLines size={22}/></span>SSound<span>Check</span></a><nav id="site-navigation" aria-label="Разделы сайта" className={menu?'open':''}><a href="#services" onClick={()=>setMenu(false)}>Услуги и цены</a><a href="#examples" onClick={()=>setMenu(false)}>Послушать</a><a href="#about" onClick={()=>setMenu(false)}>О проекте</a><a href="#process" onClick={()=>setMenu(false)}>Как заказать</a><a href="#reviews" onClick={()=>setMenu(false)}>Отзывы</a><a href="#faq" onClick={()=>setMenu(false)}>Вопросы</a></nav><a className="header-contact" href={content.telegram} target="_blank" rel="noreferrer">Обсудить идею <ArrowUpRight size={16}/></a><button className="account-header" aria-label={accountSession?'Открыть личный кабинет':'Войти в аккаунт'} onClick={()=>window.location.assign('/account')}>{accountSession?accountSession.user.name.split(' ')[0]:'Войти'}</button><button className="menu" aria-label={menu?'Закрыть меню':'Открыть меню'} aria-expanded={menu} aria-controls="site-navigation" onClick={()=>setMenu(!menu)}>{menu?<X/>:<Menu/>}</button></header>
 <main>
 <section className="hero"><picture className="hero-background"><source media="(max-width: 760px)" srcSet="/images/studio-hero-mobile-v2.webp"/><img src="/images/studio-hero-v2.webp" alt="" width={1672} height={941} fetchPriority="high"/></picture><div className="hero-glow"/><div className="hero-copy"><p className="eyebrow"><span/> МУЗЫКА, КОТОРАЯ НАЧИНАЕТСЯ С ВАС</p><h1>{content.heroTitle.split("\n").map((line,i)=><span key={i}>{i>0&&<br/>}{i===2?<em>{line}</em>:line}</span>)}</h1><p className="lead">{content.heroLead}</p><div className="hero-actions"><button className="button primary" onClick={()=>choose(2)}>Создать мою песню <ArrowUpRight size={19}/></button><a className="text-link" href="#examples">Послушать песни <ArrowRight size={18}/></a></div><a className="finder-jump" href="#pick-song">Не знаете, с чего начать? Подберём песню за минуту <ArrowRight size={14}/></a><div className="hero-note"><span>01 / ИДЕЯ</span><span>02 / ТВОРЧЕСТВО</span><span>03 / ВАША ПЕСНЯ</span></div></div>
