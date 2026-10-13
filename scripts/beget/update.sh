@@ -6,6 +6,35 @@ BASE=${SSOUNDCHECK_BASE:-/srv/ssoundcheck}
 REPO="$BASE/repository"
 exec 9>"$BASE/update.lock"
 flock -n 9 || exit 0
+prune_releases() {
+ python3 - "$BASE" <<'PYPRUNE'
+import pathlib, re, shutil, sys
+base = pathlib.Path(sys.argv[1]).resolve()
+root = (base / "releases").resolve()
+current = (base / "current").resolve(strict=True)
+if current.parent != root or not current.is_dir():
+    raise SystemExit("Cleanup refused: current is outside releases")
+pattern = re.compile(r"(?:[0-9]{8}T[0-9]{6}Z|[a-f0-9]{12}\.[A-Za-z0-9]{6})")
+releases = [p for p in root.iterdir() if not p.is_symlink() and p.is_dir() and pattern.fullmatch(p.name)]
+protected = {current}
+for pointer in base.iterdir():
+    if pointer.is_symlink():
+        target = pointer.resolve()
+        if target.parent == root:
+            protected.add(target)
+keep = set(protected)
+for release in sorted(releases, key=lambda p: p.stat().st_mtime, reverse=True):
+    if len(keep) >= 3:
+        break
+    keep.add(release)
+for release in releases:
+    if release not in keep:
+        shutil.rmtree(release)
+        print("Removed old build:", release.name)
+print("Retained releases:", ", ".join(sorted(p.name for p in keep)))
+PYPRUNE
+}
+prune_releases
 git -C "$REPO" -c core.hooksPath=/dev/null fetch --quiet origin main
 COMMIT=$(git -C "$REPO" rev-parse --verify origin/main)
 [[ "$COMMIT" =~ ^[0-9a-f]{40,64}$ ]] || exit 1
@@ -27,6 +56,9 @@ rollback() {
   ln -sfn "$OLD" "$BASE/current"
   systemctl start ssoundcheck || true
   echo 'Update failed: previous version restored' >&2
+ fi
+ if [[ "$status" != 0 ]] && [[ -d "$RELEASE" ]] && [[ $(readlink -f "$BASE/current") != "$(readlink -f "$RELEASE")" ]]; then
+  rm -rf -- "$RELEASE"
  fi
  exit "$status"
 }
@@ -65,4 +97,6 @@ done
 [[ "$READY" == 1 ]] || { echo 'Application health check failed'; exit 1; }
 printf '%s\n' "$COMMIT" > "$BASE/deployed-commit"
 STOPPED=0
+ln -sfn "$OLD" "$BASE/previous"
+prune_releases
 echo "Deployed $COMMIT"
