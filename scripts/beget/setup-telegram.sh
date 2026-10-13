@@ -11,7 +11,10 @@ fi
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 trap 'unset telegram_setup_token' EXIT
 printf 'Введите НОВЫЙ токен от BotFather (символы не отображаются): '
-IFS= read -r -s telegram_setup_token
+if ! IFS= read -r -s telegram_setup_token; then
+  printf '\nНе удалось прочитать токен. Запустите команду в открытом SSH-терминале и нажмите Enter после вставки.\n' >&2
+  exit 1
+fi
 printf '\n'
 printf '%s' "$telegram_setup_token" | node "$script_dir/setup-telegram.mjs" SSoundChekK_bot
 unset telegram_setup_token

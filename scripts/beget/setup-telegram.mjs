@@ -1,4 +1,4 @@
-import {readFileSync,writeFileSync,renameSync,unlinkSync,lstatSync} from 'node:fs';
+import {readFileSync,writeFileSync,renameSync,unlinkSync,lstatSync,realpathSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 
@@ -30,4 +30,4 @@ async function main(){
  console.log('Бот @'+username+' проверен. Новый токен сохранён в закрытом файле настроек сервера.');
  console.log('Публикации пока не включены. Следующий шаг: добавьте бота администратором канала с правом публикации и передайте ссылку на канал.');
 }
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)main().catch(e=>{console.error(e.message||'Не удалось настроить бота.');process.exitCode=1});
+if(process.argv[1]&&import.meta.url===pathToFileURL(realpathSync(process.argv[1])).href)main().catch(e=>{console.error(e.message||'Не удалось настроить бота.');process.exitCode=1});
