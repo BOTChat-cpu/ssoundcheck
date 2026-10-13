@@ -1,9 +1,9 @@
 import {createRequire} from 'node:module';
 import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
-import {activate,settings,replenish,nextSlot,verifyChannel,deliverOne,telegramCall} from '../lib/telegram-channel-core.mjs';
-import {catalogue,welcome} from '../lib/telegram-posts.mjs';
-const require=createRequire(import.meta.url),Database=require('better-sqlite3'),db=new Database(':memory:');db.exec(readFileSync(new URL('../drizzle/0015_telegram_channel.sql',import.meta.url),'utf8'));
+import {activate,settings,replenish,nextSlot,upgradeSchedule,pollAt,verifyChannel,deliverOne,telegramCall} from '../lib/telegram-channel-core.mjs';
+import {catalogue,welcome,polls} from '../lib/telegram-posts.mjs';
+const require=createRequire(import.meta.url),Database=require('better-sqlite3'),db=new Database(':memory:');db.exec(readFileSync(new URL('../drizzle/0015_telegram_channel.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../drizzle/0016_telegram_polls.sql',import.meta.url),'utf8'));
 const env={TELEGRAM_BOT_TOKEN:'123456789:'+'x'.repeat(35),TELEGRAM_BOT_USERNAME:'SSoundChekK_bot',BETTER_AUTH_URL:'https://ssoundcheck.ru'},now=Date.parse('2026-10-13T13:00:00+03:00');let checks=0,sent=[];
 const check=(v,m)=>{assert.ok(v,m);checks++};
 const transport=async(url,options)=>{
@@ -11,20 +11,20 @@ const transport=async(url,options)=>{
  if(method==='getMe')result={id:1,is_bot:true,username:'SSoundChekK_bot'};
  if(method==='getChat')result={id:-100123456,type:'channel',username:'SSoundChekKK',title:'SSoundCheck'};
  if(method==='getChatMember')result={status:'administrator',can_post_messages:true};
- if(method==='sendPhoto'){sent.push(options.body);result={message_id:sent.length}}
+ if(method==='sendPhoto'||method==='sendPoll'){sent.push(options.body);result={message_id:sent.length}}
  return {ok:true,status:200,json:async()=>({ok:true,result})};
 };
 const photo=async()=>Buffer.from('fixture-jpeg');
 check(catalogue.length===24&&[welcome,...catalogue].every(p=>p.body.length<=950),'24 bounded captions plus welcome');
-check(nextSlot(now)===Date.parse('2026-10-14T19:00:00+03:00'),'Wednesday at Moscow 19');
-check(nextSlot(nextSlot(now))===Date.parse('2026-10-17T19:00:00+03:00'),'Saturday at Moscow 19');
+check(nextSlot(now)===Date.parse('2026-10-14T18:00:00+03:00'),'Wednesday at Moscow 18');
+check(nextSlot(nextSlot(now))===Date.parse('2026-10-16T18:00:00+03:00'),'Friday at Moscow 18');
 const channel=await verifyChannel(env,'SSoundChekKK',transport);check(channel.id==='-100123456','numeric destination verified');
 await assert.rejects(verifyChannel(env,'SSoundChekKK',async(url,opts)=>url.endsWith('/getChatMember')?{status:200,json:async()=>({ok:true,result:{status:'member'}})}:transport(url,opts)),/no_permission/);checks++;
 await assert.rejects(verifyChannel(env,'AnotherChannel',transport),/wrong_channel/);checks++;
 await assert.rejects(verifyChannel({...env,TELEGRAM_BOT_USERNAME:'Another_bot'},'SSoundChekKK',transport),/wrong_bot/);checks++;
 activate(db,channel,now);check(settings(db).enabled===1,'verified channel enabled');
-check(db.prepare('SELECT COUNT(*) n FROM telegram_channel_posts').get().n===9,'welcome and four-week horizon seeded');
-activate(db,channel,now);check(db.prepare('SELECT COUNT(*) n FROM telegram_channel_posts').get().n===9,'reconnect idempotent');
+check(db.prepare('SELECT COUNT(*) n FROM telegram_channel_posts').get().n===13,'welcome and four-week horizon seeded');
+activate(db,channel,now);check(db.prepare('SELECT COUNT(*) n FROM telegram_channel_posts').get().n===13,'reconnect idempotent');
 check(!await deliverOne(db,env,photo,transport,now),'not sent before due');
 check(await deliverOne(db,env,photo,transport,now+61_000),'welcome delivered when due');
 check(sent.length===1&&sent[0].get('chat_id')===channel.id&&sent[0].get('protect_content')==='true','only configured destination and protected content');
@@ -32,7 +32,7 @@ check(sent[0].get('caption')===welcome.body&&JSON.parse(sent[0].get('reply_marku
 check(!await deliverOne(db,env,photo,transport,now+62_000)&&sent.length===1,'no duplicate immediate worker');
 const wed=nextSlot(now);db.prepare('UPDATE telegram_channel_settings SET enabled=0').run();check(!await deliverOne(db,env,photo,transport,wed)&&sent.length===1,'pause prevents sends');
 db.prepare('UPDATE telegram_channel_settings SET enabled=1').run();check(await deliverOne(db,env,photo,transport,wed),'scheduled post delivered');
-replenish(db,wed);check(db.prepare("SELECT COUNT(*) n FROM telegram_channel_posts WHERE state='queued' AND dedupe_key LIKE 'regular:%'").get().n===8,'horizon automatically replenished');
+replenish(db,wed);check(db.prepare("SELECT COUNT(*) n FROM telegram_channel_posts WHERE state='queued' AND dedupe_key LIKE 'regular:%'").get().n===12,'horizon automatically replenished');
 const sat=nextSlot(wed);const rate=async()=>({status:429,json:async()=>({ok:false,error_code:429,parameters:{retry_after:120}})});
 check(!await deliverOne(db,env,photo,rate,sat),'rate-limit send failed safely');
 let row=db.prepare("SELECT * FROM telegram_channel_posts WHERE scheduled_at=?").get(sat);check(row.state==='queued'&&row.last_error==='retry_later'&&row.next_attempt_at===sat+120000,'429 explicit delay');
@@ -44,9 +44,39 @@ check(!JSON.stringify(row).includes(env.TELEGRAM_BOT_TOKEN),'secret not persiste
 const n=sent.length;await deliverOne(db,env,photo,transport,sat+122_000);check(sent.length===n,'ambiguous post not duplicated');
 db.prepare("UPDATE telegram_channel_posts SET state='sending',lease_until=? WHERE id=?").run(sat,row.id);await deliverOne(db,env,photo,transport,sat+123_000);check(db.prepare('SELECT state FROM telegram_channel_posts WHERE id=?').get(row.id).state==='uncertain','crashed send lease requires review');
 const future=now+100*86400_000;replenish(db,future);check(db.prepare("SELECT COUNT(*) n FROM telegram_channel_posts WHERE state='skipped'").get().n>0,'stale backlog skipped');
-check(db.prepare("SELECT COUNT(*) n FROM telegram_channel_posts WHERE state='queued' AND scheduled_at>?").get(future).n===8,'future schedule refilled after outage');
+check(db.prepare("SELECT COUNT(*) n FROM telegram_channel_posts WHERE state='queued' AND scheduled_at>?").get(future).n===12,'future schedule refilled after outage');
 const later=nextSlot(future);await deliverOne(db,env,photo,transport,later);check(!await deliverOne(db,env,photo,transport,later+60_000),'8-hour flood guard');
 await assert.rejects(telegramCall(env,'getMe',{},unknown),e=>e.message==='delivery_unknown'&&!e.message.includes(env.TELEGRAM_BOT_TOKEN));checks++;
 const fresh=activate(db,{...channel,id:'-10078910'},future);check(settings(db).last_sent_at===null,'destination change resets cooldown');
 check(!db.prepare("SELECT * FROM telegram_channel_posts WHERE channel_id='-10078910' AND state='sent'").get(),'new destination keeps history separate');
+const pollDate=Date.parse('2026-10-30T18:00:00+03:00');
+check(pollAt(pollDate)?.kind==='poll'&&!pollAt(Date.parse('2026-10-23T18:00:00+03:00')),'poll every other Friday');
+check(polls.length===12&&polls.every(p=>p.poll_question.length<=300&&p.poll_options.length>=2&&p.poll_options.every(o=>o.length<=100)),'bounded prepared questions and options');
+// Force a verified queued poll without waiting or sending to Telegram.
+db.prepare("UPDATE telegram_channel_posts SET state='cancelled' WHERE state='queued'").run();
+db.prepare('UPDATE telegram_channel_settings SET last_sent_at=NULL').run();
+const poll= db.prepare("SELECT * FROM telegram_channel_posts WHERE kind='poll' LIMIT 1").get();
+db.prepare("UPDATE telegram_channel_posts SET state='queued',scheduled_at=?,next_attempt_at=?,attempts=0,channel_id=? WHERE id=?").run(pollDate,pollDate,settings(db).channel_id,poll.id);
+let pollPayload;const pollTransport=async(url,opts)=>{check(url.endsWith('/sendPoll'),'native sendPoll method');pollPayload=JSON.parse(opts.body);return {status:200,json:async()=>({ok:true,result:{message_id:777}})}};
+check(await deliverOne(db,env,async()=>{throw Error('poll must not load photo')},pollTransport,pollDate),'poll delivery without image');
+check(pollPayload.is_anonymous===true&&pollPayload.allows_multiple_answers===true&&pollPayload.options.every(o=>typeof o.text==='string'),'anonymous native poll options and multiple recipients');
+check(pollPayload.reply_markup.inline_keyboard[0][0].url.includes('utm_source=telegram'),'poll site CTA');
+// Upgrade changes only untouched automatic jobs; history and custom drafts survive.
+db.prepare('UPDATE telegram_channel_settings SET plan_version=0').run();
+db.prepare("UPDATE telegram_channel_posts SET state='queued',kind='photo',dedupe_key='regular:old',scheduled_at=?,next_attempt_at=?,attempts=0 WHERE id=?").run(now,now,poll.id);
+const sentCount=db.prepare("SELECT COUNT(*) n FROM telegram_channel_posts WHERE state='sent'").get().n;
+upgradeSchedule(db,now);const changed=db.prepare('SELECT * FROM telegram_channel_posts WHERE id=?').get(poll.id);
+check(changed.scheduled_at===nextSlot(now)&&changed.state==='queued','queued automatic posts rescheduled');
+check(db.prepare("SELECT COUNT(*) n FROM telegram_channel_posts WHERE state='sent'").get().n===sentCount&&settings(db).plan_version===2,'published history retained and version marked');
+const when=changed.scheduled_at;upgradeSchedule(db,now+3600000);check(db.prepare('SELECT scheduled_at FROM telegram_channel_posts WHERE id=?').get(poll.id).scheduled_at===when,'schedule upgrade idempotent');
+const legacy=new Database(':memory:');legacy.exec(readFileSync(new URL('../drizzle/0015_telegram_channel.sql',import.meta.url),'utf8'));
+legacy.prepare('INSERT INTO telegram_channel_settings(id,channel_id,username,title,enabled,updated_at) VALUES (1,?,?,?,?,?)').run(channel.id,channel.username,channel.title,0,now);
+const oldAt=Date.parse('2026-10-14T19:00:00+03:00');
+for(const [id,key,state,attempts] of [['auto','regular:old','queued',0],['custom','custom:test','queued',0],['done','regular:sent','sent',1],['attempt','regular:retry','queued',1]])legacy.prepare('INSERT INTO telegram_channel_posts(id,channel_id,dedupe_key,topic,body,image,scheduled_at,next_attempt_at,created_at,state,attempts) VALUES (?,?,?,?,?,?,?,?,?,?,?)').run(id,channel.id,key,'Fixture','Existing text','story',oldAt,oldAt,now,state,attempts);
+legacy.exec(readFileSync(new URL('../drizzle/0016_telegram_polls.sql',import.meta.url),'utf8'));replenish(legacy,now);
+check(legacy.prepare("SELECT scheduled_at FROM telegram_channel_posts WHERE id='auto'").get().scheduled_at===nextSlot(now),'paused queued automatic schedule migrated');
+check(legacy.prepare("SELECT scheduled_at FROM telegram_channel_posts WHERE id='custom'").get().scheduled_at===oldAt,'manual schedule untouched');
+check(legacy.prepare("SELECT state,scheduled_at FROM telegram_channel_posts WHERE id='done'").get().state==='sent'&&legacy.prepare("SELECT scheduled_at FROM telegram_channel_posts WHERE id='done'").get().scheduled_at===oldAt,'published history untouched by legacy upgrade');
+check(legacy.prepare("SELECT scheduled_at FROM telegram_channel_posts WHERE id='attempt'").get().scheduled_at===oldAt,'attempted delivery not rescheduled');
+check(legacy.prepare('SELECT COUNT(*) n FROM telegram_channel_posts').get().n===4,'paused migration does not add new posts');legacy.close();
 console.log('PASS: '+checks+' Telegram channel queue checks; no real Telegram messages sent');db.close();

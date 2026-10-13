@@ -25,7 +25,11 @@ try{
  check((await post({action:'connect'})).status===503,'missing token fails without publishing');
  check(db.prepare('SELECT COUNT(*) n FROM telegram_channel_posts').get().n===0,'failed connection creates no posts');
  activate(db,{id:'-100123456',username:'SSoundChekKK',title:'SSoundCheck'},Date.now());
- r=await fetch(origin+'/api/admin/channel',{headers:{Cookie:cookie}});data=await r.json();check(data.posts.length===9&&!JSON.stringify(data).includes('TELEGRAM_BOT_TOKEN'),'queued captions visible without credentials');
+ r=await fetch(origin+'/api/admin/channel',{headers:{Cookie:cookie}});data=await r.json();check(data.posts.length===13&&!JSON.stringify(data).includes('TELEGRAM_BOT_TOKEN'),'queued captions visible without credentials');
+ const poll=data.posts.find(p=>p.kind==='poll');check(poll&&typeof poll.poll_question==='string'&&JSON.parse(poll.poll_options).length>=2,'poll question and options visible in admin queue');
+ check(data.posts.filter(p=>p.kind==='poll').length===2,'two polls in four-week automatic horizon');
+ check(data.posts.find(p=>p.poll_question==='Кому вы бы подарили персональную песню?')?.poll_multiple===1,'recipient poll allows multiple answers');
+ check(data.posts.find(p=>p.poll_question==='Какое звучание вам ближе?')?.poll_multiple===0,'preference poll remains single choice');
  check((await post({action:'pause'},{Origin:'https://evil.invalid'})).status===403,'CSRF pause denied');
  check((await post({action:'pause'})).ok&&db.prepare('SELECT enabled FROM telegram_channel_settings').get().enabled===0,'pause saves');
  check((await post({action:'resume'})).ok&&db.prepare('SELECT enabled FROM telegram_channel_settings').get().enabled===1,'resume saves without test bot sends');
